@@ -1,6 +1,7 @@
 
 import React, { createContext, useContext, useState, useEffect, ReactNode } from 'react';
 import { Task, Subject, Goal, CourseData } from '../types';
+import * as db from '../services/databaseService';
 
 interface StudyContextType {
   tasks: Task[];
@@ -18,6 +19,7 @@ interface StudyContextType {
   deleteGoal: (id: string) => void;
   saveCourse: (course: CourseData) => void;
   deleteCourse: (id: string) => void;
+  refreshCourses: () => Promise<void>;
 }
 
 const StudyContext = createContext<StudyContextType | undefined>(undefined);
@@ -30,7 +32,7 @@ export const useStudyContext = () => {
   return context;
 };
 
-export const StudyProvider: React.FC<{ children: ReactNode }> = ({ children }) => {
+export const StudyProvider: React.FC<{ children: ReactNode; userId?: string }> = ({ children, userId = 'default' }) => {
   const [tasks, setTasks] = useState<Task[]>(() => {
     const saved = localStorage.getItem('ai-study-tasks');
     return saved ? JSON.parse(saved) : [];
@@ -46,16 +48,26 @@ export const StudyProvider: React.FC<{ children: ReactNode }> = ({ children }) =
     return saved ? JSON.parse(saved) : [];
   });
 
-  const [savedCourses, setSavedCourses] = useState<CourseData[]>(() => {
-    const saved = localStorage.getItem('ai-study-courses');
-    return saved ? JSON.parse(saved) : [];
-  });
+  const [savedCourses, setSavedCourses] = useState<CourseData[]>([]);
 
-  // Persistence effects
+  // Initialize database and load courses
+  useEffect(() => {
+    const initAndLoad = async () => {
+      try {
+        await db.initDatabase();
+        const courses = await db.getCoursesByUserId(userId);
+        setSavedCourses(courses);
+      } catch (error) {
+        console.error('Failed to initialize database:', error);
+      }
+    };
+    initAndLoad();
+  }, [userId]);
+
+  // Persistence effects for tasks, subjects, goals (keeping localStorage for these)
   useEffect(() => localStorage.setItem('ai-study-tasks', JSON.stringify(tasks)), [tasks]);
   useEffect(() => localStorage.setItem('ai-study-subjects', JSON.stringify(subjects)), [subjects]);
   useEffect(() => localStorage.setItem('ai-study-goals', JSON.stringify(goals)), [goals]);
-  useEffect(() => localStorage.setItem('ai-study-courses', JSON.stringify(savedCourses)), [savedCourses]);
 
   // Task Actions
   const addTask = (text: string, dueDate: string) => {
@@ -100,13 +112,22 @@ export const StudyProvider: React.FC<{ children: ReactNode }> = ({ children }) =
   };
 
   // Course Actions
-  const saveCourse = (course: CourseData) => {
-    const courseId = course.id || Date.now().toString();
-    const newCourse = { ...course, id: courseId, timestamp: Date.now() };
+  const saveCourse = async (course: CourseData) => {
+    const courseId = course.id || `course_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
+    const newCourse = { ...course, id: courseId, userId, timestamp: Date.now() };
     
-    // Check if course already exists to prevent duplicates if clicked multiple times
-    if (!savedCourses.some(c => c.title === course.title)) {
-      setSavedCourses(prev => [newCourse, ...prev]);
+    try {
+      // Save to database
+      await db.saveCourse(newCourse, userId);
+      
+      // Update state
+      setSavedCourses(prev => {
+        // Check if course already exists to prevent duplicates
+        if (prev.some(c => c.id === courseId)) {
+          return prev.map(c => c.id === courseId ? newCourse : c);
+        }
+        return [newCourse, ...prev];
+      });
 
       // Automatically create a Subject
       const newSubject: Subject = {
@@ -114,21 +135,49 @@ export const StudyProvider: React.FC<{ children: ReactNode }> = ({ children }) =
         name: course.title,
         progress: 0
       };
-      setSubjects(prev => [...prev, newSubject]);
+      setSubjects(prev => {
+        if (!prev.some(s => s.id === newSubject.id)) {
+          return [...prev, newSubject];
+        }
+        return prev;
+      });
 
       // Automatically create Tasks for each module
       const newTasks: Task[] = course.modules.map((mod, index) => ({
         id: `task-${courseId}-${index}`,
         text: `Study Module ${index + 1}: ${mod.moduleTitle}`,
         completed: false,
-        dueDate: new Date(Date.now() + (index + 1) * 24 * 60 * 60 * 1000).toISOString().split('T')[0] // Due date staggered by day
+        dueDate: new Date(Date.now() + (index + 1) * 24 * 60 * 60 * 1000).toISOString().split('T')[0]
       }));
-      setTasks(prev => [...prev, ...newTasks]);
+      
+      setTasks(prev => {
+        const existingTaskIds = new Set(prev.map(t => t.id));
+        const tasksToAdd = newTasks.filter(t => !existingTaskIds.has(t.id));
+        return [...prev, ...tasksToAdd];
+      });
+    } catch (error) {
+      console.error('Failed to save course:', error);
+      throw error;
     }
   };
 
-  const deleteCourse = (id: string) => {
-    setSavedCourses(prev => prev.filter(c => c.id !== id));
+  const deleteCourse = async (id: string) => {
+    try {
+      await db.deleteCourse(id);
+      setSavedCourses(prev => prev.filter(c => c.id !== id));
+    } catch (error) {
+      console.error('Failed to delete course:', error);
+      throw error;
+    }
+  };
+
+  const refreshCourses = async () => {
+    try {
+      const courses = await db.getCoursesByUserId(userId);
+      setSavedCourses(courses);
+    } catch (error) {
+      console.error('Failed to refresh courses:', error);
+    }
   };
 
   return (
@@ -137,7 +186,7 @@ export const StudyProvider: React.FC<{ children: ReactNode }> = ({ children }) =
       addTask, updateTask, deleteTask,
       addSubject, updateSubject, deleteSubject,
       addGoal, updateGoal, deleteGoal,
-      saveCourse, deleteCourse
+      saveCourse, deleteCourse, refreshCourses
     }}>
       {children}
     </StudyContext.Provider>

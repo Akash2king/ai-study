@@ -2,11 +2,14 @@
 import { GoogleGenAI, Type, Chat } from "@google/genai";
 import { CourseData } from '../types';
 
-if (!process.env.API_KEY) {
-    throw new Error("API_KEY environment variable not set");
+// Read the API key from Vite env (must be prefixed with VITE_ to be exposed to the client)
+const GEMINI_API_KEY = import.meta.env.VITE_GEMINI_API_KEY as string | undefined;
+
+if (!GEMINI_API_KEY) {
+  throw new Error("VITE_GEMINI_API_KEY is not set. Add it to your .env.local file.");
 }
 
-const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
+const ai = new GoogleGenAI({ apiKey: GEMINI_API_KEY });
 
 const courseSchema = {
   type: Type.OBJECT,
@@ -79,23 +82,29 @@ export const generateCourse = async (topic: string): Promise<CourseData> => {
     const prompt = `Generate a comprehensive, detailed, beginner-friendly course on the topic: "${topic}". Structure the course into logical modules, where each module contains several detailed sections. Each section should be written in the style of an in-depth blog post. Format textual content as clean, semantic HTML. If a concept (like programming, math, or data structures) is best explained with code, extract that code into the 'codeSnippet' field rather than embedding it in the HTML. For video lessons, provide a valid YouTube video ID.`;
     
     try {
-        const response = await ai.models.generateContent({
-            model: "gemini-2.5-pro",
-            contents: prompt,
-            config: {
-                responseMimeType: "application/json",
-                responseSchema: courseSchema,
-                temperature: 0.7,
-            },
-        });
+    const response = await ai.models.generateContent({
+      model: "gemini-2.5-pro",
+      contents: [
+        {
+          role: "user",
+          parts: [{ text: prompt }],
+        },
+      ],
+      config: {
+        responseMimeType: "application/json",
+        responseSchema: courseSchema,
+        temperature: 0.7,
+      },
+    });
         
-        const jsonText = response.text;
+    const jsonText = response.text;
         const parsedData: CourseData = JSON.parse(jsonText);
         return parsedData;
 
     } catch (error) {
-        console.error("Error generating course:", error);
-        throw new Error("Failed to generate course. The topic might be too broad or restricted.");
+    console.error("Error generating course:", error);
+    const message = error instanceof Error ? error.message : String(error);
+    throw new Error(`Failed to generate course. ${message.includes('API') ? 'Check your API key and billing status.' : 'The topic might be too broad or restricted.'}`);
     }
 };
 

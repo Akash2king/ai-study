@@ -7,6 +7,7 @@ import SparklesIcon from './icons/SparklesIcon';
 import ClipboardIcon from './icons/ClipboardIcon';
 import ChartIcon from './icons/ChartIcon';
 import TargetIcon from './icons/TargetIcon';
+import DatabaseStats from './DatabaseStats';
 
 interface SidebarProps {
   currentView: AppView;
@@ -53,7 +54,7 @@ const Sidebar: React.FC<SidebarProps> = ({ currentView, setCurrentView }) => {
         />
         <NavItem
           icon={<BrainIcon className="w-5 h-5" />}
-          label="Course Generator"
+          label="Generate Course"
           view={AppView.COURSE_GENERATOR}
           currentView={currentView}
           onClick={setCurrentView}
@@ -80,8 +81,11 @@ const Sidebar: React.FC<SidebarProps> = ({ currentView, setCurrentView }) => {
           onClick={setCurrentView}
         />
       </nav>
-      <div className="mt-auto text-center text-xs text-gray-500 p-4">
-        <p>The Future of Learning</p>
+      <div className="mt-auto space-y-4">
+        <DatabaseStats />
+        <div className="text-center text-xs text-gray-500 p-4">
+          <p>The Future of Learning</p>
+        </div>
       </div>
     </aside>
   );

@@ -7,16 +7,40 @@ export enum AppView {
   STUDY_TIMER = 'STUDY_TIMER',
 }
 
+export interface UserProfile {
+  id: string;
+  name: string;
+  email: string;
+  createdAt: number;
+}
+
+export interface CourseProgress {
+  courseId: string;
+  userId: string;
+  completedModules: number[];
+  completedSections: { moduleIndex: number; sectionIndex: number }[];
+  lastAccessedAt: number;
+  progressPercentage: number;
+}
+
 export interface CodeSnippet {
   language: string;
   code: string;
   description: string;
 }
 
+export interface SectionResource {
+  type: 'video' | 'article' | 'image' | 'documentation';
+  title: string;
+  url: string;
+  description?: string;
+}
+
 export interface CourseSection {
   heading: string;
   content: string;
   codeSnippet?: CodeSnippet;
+  resources?: SectionResource[];
 }
 
 export interface Module {
@@ -27,7 +51,7 @@ export interface Module {
 export interface VideoSuggestion {
   title: string;
   query: string;
-  videoId: string;
+  videoId?: string;
 }
 
 export interface Reference {
@@ -37,12 +61,14 @@ export interface Reference {
 
 export interface CourseData {
   id?: string;
+  userId?: string;
   title: string;
   introduction: string;
   modules: Module[];
   videoSuggestions: VideoSuggestion[];
   references: Reference[];
   timestamp?: number;
+  progress?: CourseProgress;
 }
 
 export interface ChatMessage {
