@@ -563,8 +563,8 @@ const CourseGenerator: React.FC<CourseGeneratorProps> = ({ userId, initialCourse
                                     </div>
                                 </div>
                             </div>
+                        </div>
                         )}
-                    </div>
 
                         {/* Toggle button for left sidebar when hidden */}
                         {!showLeftSidebar && (
